@@ -1,0 +1,220 @@
+Doküman İşleme ve NLP Platformu Mimari Tasarımı
+Genel Bakış
+Bu proje; PDF, Word, metin gibi çeşitli formatlardaki dokümanların yüklenip depolanabildiği, bu dokümanlar üzerinde doğal dilde arama, özetleme ve anahtar kelime çıkarımı yapılabilen bir web uygulamasıdır. Sistem, kullanıcı girişi (üye olma/oturum açma) ile güvenli bir şekilde kullanılacaktır. Uygulama MERN yığınını (MongoDB, Express.js/Node.js, React) temel alacak şekilde tasarlanmıştır. Bu sayede istemci tarafında tek sayfa uygulaması (SPA) deneyimi sunulurken, sunucu tarafında Node.js tabanlı bir API ve MongoDB veritabanı ile üç katmanlı bir mimari kurulacaktır
+mongodb.com
+. Harici olarak, Google’ın Gemini API’ı (Vertex AI’nın bir parçası olan büyük dil modeli) doküman içeriklerini özetlemek, anahtar kavramları çıkarmak ve semantik arama yapabilmek için entegre edilecektir. Temel Özellikler:
+Kullanıcı Yönetimi: Kullanıcılar kayıt olup güvenli şekilde sisteme giriş yapar. Her kullanıcının kendi dokümanları ve işlemleri diğerlerinden izole edilir.
+Doküman Yükleme: Kullanıcı, arayüzde tek seferde bir doküman dosyası yükleyebilir (PDF, Word, TXT vb.). Yüklenen doküman sunucuya kaydedilir ve içeriği metin olarak veritabanında saklanır.
+Doğal Dilde Arama: Kullanıcı, yüklediği dokümanlar içinde anahtar kelime veya cümlelerle arama yapabilir. Arama özelliği, sorguyu yalnızca kelime eşleşmesi olarak değil, anlam düzeyinde eşleştirecek şekilde çalışacaktır. Bu sayede kullanıcı tam anahtar kelimeyi girmese bile ilgili içerikleri bulabilir (semantik arama).
+Özetleme: Kullanıcı bir dokümanı özetlemek istediğinde, dokümanın ana hatlarını veren otomatik bir özet oluşturulur. Bu özet, dokümanın içerdiği ana fikirleri birkaç cümleyle ifade eder.
+Anahtar Kelime Çıkarımı: Seçilen dokümandan en önemli konuları ve kavramları yansıtan anahtar kelime veya kelime öbekleri çıkarılır. Böylece uzun metinlerin temel temaları hızlıca anlaşılabilir.
+Aşağıda, bu özellikleri gerçekleştirmek için tasarlanan sistemin mimari bileşenleri ile kullanıcı ve teknik dokümantasyon detaylı olarak sunulmuştur.
+Teknik Dokümantasyon
+Mimarinin Genel Yapısı
+Sistem, üç katmanlı MERN mimarisi üzerine kuruludur. Bu mimaride istemci, sunucu ve veritabanı katmanları JavaScript ve JSON tabanlı teknolojilerle uçtan uca entegre çalışır
+mongodb.com
+. Ana bileşenler ve sorumlulukları şöyledir:
+İstemci (Frontend): React.js ile geliştirilmiş tek sayfa uygulaması. Kullanıcı arayüzü üzerinden doküman yükleme, arama sorgusu girme, özetleme ve anahtar kelime çıkarma işlemlerini tetikler. İstemci, Node.js tabanlı API ile HTTP üzerinden iletişim kurar.
+Sunucu (Backend API): Node.js ve Express.js ile geliştirilen uygulama sunucusu. RESTful API uç noktaları sağlar. Bu katman kullanıcı doğrulama, dosya yükleme işlemlerini alır; doküman içeriğini işler; Google Gemini API çağrılarını yaparak özetleme/analiz sonuçlarını elde eder; veritabanı ile etkileşime geçerek veri saklama ve arama işlemlerini yürütür.
+Veritabanı (MongoDB): MongoDB Atlas üzerinde barındırılan, doküman verilerinin ve kullanıcı hesap bilgilerinin tutulduğu NoSQL veritabanı. Dokümanlar kullanıcılara bağlı şekilde kaydedilir. Gerekli metin arama ve vektör arama indeksleri bu veritabanında tanımlanır.
+Bu bileşenler arasındaki iletişim, tipik bir istemci-sunucu ilişkisi şeklindedir: React arayüzü kullanıcı eylemlerini API çağrılarına dönüştürür, Node.js sunucu bu çağrıları işleyerek gerekli işlemleri yapar ve yanıtları geri döndürür. Aşağıdaki alt başlıklarda, teknik mimarinin kritik ayrıntıları açıklanmıştır.
+Frontend (React) Tasarımı
+Ön yüz, kullanıcı dostu bir arayüz sunar ve React ile SPA (Single Page Application) olarak geliştirilir. Başlıca arayüz bileşenleri ve akış:
+Kullanıcı Girişi Ekranı: Kayıt olma ve giriş yapma formları. Kullanıcı girişi başarılı olduğunda, JWT veya oturum bilgisi alınarak sonraki isteklerde kimlik doğrulaması yapılır.
+Doküman Yükleme Formu: Kullanıcı, dosya seçip yükleme butonuna bastığında, seçilen dosya Frontend'den Backend API’ye gönderilir. Her seferinde tek bir dosya yüklenebilir (çoklu seçim engellenir), böylece “tek tek yükleme” kuralı sağlanır.
+Doküman Listesi ve İşlem Butonları: Giriş yapan kullanıcıya ait yüklenmiş dokümanlar listelenir. Her dokümanın yanında “Özetle” ve “Anahtar Kelimeleri Çıkar” butonları bulunur. Ayrıca üst kısımda bir arama çubuğu vardır. Kullanıcı arama çubuğuna herhangi bir doğal dil ifadesi veya kelime girdiğinde “Ara” butonuna basarak dokümanlarında arama yapabilir.
+Sonuç Gösterimi:
+Arama sonuçları: Kullanıcının sorgusuna en uygun dokümanlar veya doküman içi bölümler listelenir, vurgulanmış eşleşmeler veya kısa bir bağlam ile sunulur.
+Özet: Seçilen dokümanın otomatik oluşturulan özeti ekranda gösterilir (ör. bir modal veya ayrı bir bölümde).
+Anahtar Kelimeler: Dokümandan çıkarılan önemli anahtar kelime ve ifadeler listesi gösterilir (etiket bulutu veya madde işaretli liste şeklinde).
+React tarafı, bu işlemler için Axios gibi bir istemci kullanarak arka uç API’ye istekler yapar. Uygulama durumu için gerekirse Redux veya React Context kullanılabilir. Önemli nokta, her istekte kullanıcı kimliğinin doğrulanması için JWT token veya oturum çerezi gönderilecektir. Arayüzde ayrıca hatalar (ör. başarısız yükleme, yetkisizlik, API hataları) için bilgilendirici geri bildirim mekanizmaları bulunacaktır.
+Backend (Node.js & Express) Tasarımı
+Sunucu tarafı Node.js üzerinde Express framework’üyle inşa edilir. Sunucu, aşağıdaki ana fonksiyonellikleri REST API uçları olarak sunacaktır:
+Kimlik Doğrulama API’si: /auth/register ve /auth/login uç noktaları.
+Register (kayıt) isteği kullanıcı adı, e-posta, şifre alır; şifre sunucuda güçlü bir hash algoritmasıyla (ör. bcrypt) hash’lenerek MongoDB’de yeni kullanıcı olarak saklanır. Şifrelerin düz metin olarak tutulması kesinlikle engellenmiştir; hash kullanımı sayesinde veritabanı ele geçirilse bile gerçek parolaların elde edilmesi son derece zordur
+honeybadger.io
+honeybadger.io
+.
+Login isteği geldiğinde, girilen kimlik bilgileri doğrulanır ve başarılıysa bir JWT token üretilir ya da sunucu tabanlı oturum mekanizması ile kullanıcıya oturum açılır. Bu token/oturum, kullanıcının sonraki isteklerinde kimlik ispatı olarak kullanılacaktır. Güvenlik: API, oturum açma girişimlerini ve kritik alanları hız sınırlama, güçlü parola politikası ve gerektiğinde reCAPTCHA ile korur.
+Dosya Yükleme API’si: /documents/upload uç noktası (korumalı, sadece giriş yapmış kullanıcı erişebilir). İstemci, dosyayı Form Data olarak gönderir. Sunucu, dosyayı alır ve işlemler:
+Dosya Formatı Algılama: Dosya uzantısına veya MIME türüne bakarak PDF, Word (docx) ya da düz metin olup olmadığını anlar. Desteklenmeyen format gelirse hata döndürür.
+Metin İçeriğini Çıkarma: PDF veya Word gibi yapılandırılmış formatlardan metin çıkarılması gerekir. Bu aşamada sunucu, uygun kütüphaneleri kullanarak dosyanın tüm metin içeriğini elde eder. Örneğin:
+PDF için: pdf-parse veya pdfjs kütüphanesi kullanılarak metin içerik alınabilir
+blog.logrocket.com
+.
+Word (docx) için: mammoth.js gibi bir kütüphane ile metin dönüştürme yapılabilir.
+Düz metin dosyaları için: doğrudan okuma yeterlidir.
+Not: Eğer doküman taranmış bir görsel PDF ise, metin çıkarımı için OCR gerekebilir. Google’ın Document AI servisi bu amaçla kullanılabilir
+cloud.google.com
+, ancak bu proje kapsamında tercihen açık kaynak çözümler veya gerekirse Tesseract OCR entegre edilebilir.
+Veritabanına Kaydetme: Elde edilen metin içeriği ve dosyanın orijinal adı, boyutu, formatı gibi meta veriler MongoDB’ye kaydedilir. Bu veriler, kullanıcı kimliği ile ilişkilendirilerek saklanır (örn. users koleksiyonunun alt belgesi veya ayrı bir documents koleksiyonunda her belge dokümanını kullanıcı referansı ile tutma). Dosyanın binary verisini de saklamak gerekirse, MongoDB GridFS kullanılabilir; ancak burada öncelik metin içeriktedir (zaten arama ve özetleme bu metin üzerinden olacaktır).
+Arama İçin İndeksleme: Dokümanın metin içeriği kaydedildikten sonra, arama işlevini hızlandırmak ve semantik arama yapabilmek için ek işlemler:
+MongoDB üzerinde belgenin metin alanına full-text index eklenir (Mongo’nun $text indeksi, kelime bazlı aramalar için kullanılabilir).
+Semantik Vektör İndeksi: Doğal dilde arama için, doküman içeriğinin bir vektör gösterimi (embedding) hesaplanır ve veritabanında saklanır. Google Gemini API, metinleri yüksek boyutlu vektörlere dönüştürebilen bir Embedding modeli de sunmaktadır (Gemini Embeddings)
+ai.google.dev
+. Alternatif olarak, açık kaynak bir cümle embedding modeli veya HuggingFace modeli de kullanılabilir. Elde edilen embedding vektörü, MongoDB’nin Atlas Vector Search özelliği kullanılarak veritabanında bir vektör alanına kaydedilir
+medium.com
+medium.com
+. MongoDB Atlas’ta vektör benzeri aramalar için özel indeks türleri bulunur; örneğin 384 boyutlu bir vektör alanı için indeks tanımlanabilir
+medium.com
+. Bu sayede doküman metinleri anlamsal uzayda temsil edilip arama sorguları ile yakınlık karşılaştırması yapılabilir.
+İndeksleme işlemi asenkron da yapılabilir: Dosya yükleme isteği yanıtı verilirken arkada bir iş kuyruğu (ör. BullMQ) ile embedding hesaplama tamamlanabilir. Ancak proje ölçeği küçük ise, yükleme sırasında senkron da yapılabilir.
+Arama API’si: /documents/search?query=... uç noktası (korumalı). Kullanıcı arayüzündeki arama çubuğundan gelen sorgu bu API’ye iletilir. Sunucu, query parametresindeki doğal dil ifadesini alarak:
+Sorgu İşleme: Sorgu cümlesini eğer semantik arama yapacaksak bir vektöre dönüştürür (yine Gemini Embeddings veya benzer model ile). Aynı embedding modeli kullanılmalı ki doküman vektörleriyle aynı uzayda karşılaştırılabilsin
+medium.com
+. Ayrıca, ek olarak veya alternatif olarak, sorguyu doğrudan anahtar kelimelere bölüp text index üzerinde de arayabiliriz.
+Veritabanı Araması:
+Semantik Arama: MongoDB’de vektör benzerlik araması yapılarak sorgu vektörüne en yakın doküman vektörleri getirilir (örn. kosinüs benzerliği ile en yakın N sonuç). Bu yaklaşım sayesinde tam kelime eşleşmese bile anlamca ilgili sonuçlar bulunur. Nitekim vektör arama, kullanıcıların bir cümle veya ifade ile sorgulama yapıp, tam kelime eşleşmesi olmasa bile ilgili içerikleri hızlıca bulmasını sağlar
+mongodb.com
+.
+Anahtar Kelime Arama: Eğer text index kullanılacaksa, MongoDB’nin $text arama özelliği ile doküman metinleri içinde sorgudaki kelimelerin geçtiği kayıtlar skorlara göre getirilebilir.
+Sonuç Birleştirme: Eğer her iki yöntemi de uyguladıysak (opsiyonel), her iki sonuç seti birleştirilip skor sıralaması harmanlanabilir. Basitlik açısından tek bir yöntem de seçilebilir; semantik arama kullanıcı deneyimini geliştirecektir.
+Yanıt Oluşturma: Bulunan en alakalı dokümanlar ve tercihen içindeki ilgili kısımdan bir metin kesiti, istemciye JSON olarak döndürülür. Örneğin yanıt, her doküman için {dokumanId, dokumanAdi, eslesmeSkoru, eslesenMetinParcasi} şeklinde olabilir.
+Özetleme API’si: /documents/:id/summary uç noktası (korumalı). Belirli bir dokümanın ID’si ile çağrılır. Sunucu bu dokümanın tam metnini veritabanından alır ve Google Gemini API kullanarak özetleme yapar. Özetleme işlemi şu şekilde gerçekleşir:
+LLM Prompt Hazırlığı: Doküman metni çok uzun değilse doğrudan modele gönderilebilir. Ancak çok büyük metinler için, ön işleme gerekebilir – örneğin dokümanı parçalara ayırıp her parçayı ayrı özetleyip sonra bu özetleri birleştirme (haritala-azalt yöntemi) kullanılabilir. Google’ın Gemini modelleri oldukça uzun bağlamları kaldırabilir; hatta milyonlarca tokenı işleyebilecek şekilde tasarlanmıştır
+ai.google.dev
+, bu da büyük dokümanları tek seferde özetlemeye imkân verebilir. Yine de temkinli yaklaşım için, belli bir boyuttan büyük metinler kademeli özetlenebilir.
+API Çağrısı: Google Vertex AI’nın generativeLanguage API’si (Gemini) models/gemini-*-:generateContent metoduyla metinden özet üretebilir
+ai.google.dev
+ai.google.dev
+. Sunucu bu API’yi, projenin sağlanan API anahtarını kullanarak çağırır. Örneğin, Node.js üzerinde Google tarafından sağlanan @google/genai kütüphanesi kullanılabilir
+ai.google.dev
+. Doküman metni istek gövdesine kullanıcı rolünde bir içerik olarak verilir ve modelden “bu metni özetle” tarzı bir istem (prompt) ile yanıt istenir.
+Özet Sonucunu Alma: API çağrısı başarılı olduğunda modelin döndürdüğü özet metni alınır. (Bu işlem biraz zaman alabileceği için, istek süresinin uygun bir şekilde yönetilmesi önemlidir. Gerekirse istemciye bekleme animasyonu gösterilir.)
+Yanıt: Özet metni JSON içinde istemciye döndürülür. İleride performans iyileştirmesi olarak, üretilen özet veritabanına da kaydedilip tekrar istenirse doğrudan verilebilir.
+Not: Özetleme için LLM kullanımına gerçek dünyadan bir örnek, uzun video transkriptlerinin AI ile özetlenmesidir. MongoDB’nin bir çözümünde, video metinleri bir LLM tarafından özetlenerek kısa hale getirilmiştir
+mongodb.com
+. Burada da benzer şekilde doküman metni LLM’e verilerek “içeriğin özlü bir özeti” istenecektir.
+Anahtar Kelime Çıkarma API’si: /documents/:id/keywords uç noktası (korumalı). Bu uç nokta, seçilen dokümanın önemli anahtar kelimelerini/ifadelerini döndürür:
+Sunucu ilgili doküman metnini DB’den alır.
+Bu metni analiz ederek en önemli kelime ve kısa ifadeleri tespit eder. İki yaklaşım mümkündür:
+LLM Tabanlı Yaklaşım: Yine Google Gemini LLM kullanılabilir. Modele, “Bu metindeki en önemli konuları/kelimeleri listele” şeklinde bir istem gönderilir. Örneğin, bir blog yazısındaki önemli anahtar kelimeleri çıkarma senaryosu LLM ile yapılabilir ve bu işlem dokümanın ana konularını hızlıca özetlemeye yarar
+dev.to
+. LLM’den alınan cevabı işleyerek belirli sayıda (ör. 5-10) anahtar kelime çıkarılabilir. Hatta istenirse, LLM’den JSON formatında bir çıktı üretmesi istenip anahtar kelimeler ve bağlamlarıyla birlikte alınabilir
+dev.to
+dev.to
+.
+Klasik NLP Yaklaşımı: Metin üzerinde istatistiksel yöntemlerle anahtar kelime çıkarmak da mümkündür. Örneğin TF-IDF skorlarına veya RAKE algoritmasına göre en sık/geçerli kelime öbeklerini bulmak. Bu yöntemde durak kelimelerin elenmesi, kök bulma (stemming) gibi adımlar gerekir. Lakin proje kapsamında halihazırda güçlü bir LLM erişimi varken, bu işi LLM’e yaptırmak geliştirme süresini kısaltır.
+Elde edilen anahtar kelime listesi istemciye JSON formatında döndürülür (ör. ["AI", "özelleştirilmiş arama", "özetleme"] gibi bir dizi veya her kelimeyle ilgili bir güven puanı da olabilir).
+Google Gemini API Entegrasyonu
+Projedeki en kritik harici servis, Google Gemini API’dır. Bu API, Google Cloud Vertex AI platformunun bir parçasıdır ve metin oluşturma, anlama konusunda son teknoloji büyük dil modellerini (LLM) sunar
+ai.google.dev
+. Projemizde Gemini API üç amaçla kullanılacaktır:
+Metin Özetleme: Doküman metinlerini kısaltmak ve özetlemek için Gemini’nin metin üretme yeteneği kullanılır. Örneğin, Vertex AI üzerindeki “gemini-1.5-pro” modeli ile, uzun bir metnin ana noktalarını kapsayan birkaç paragraflık özet alabiliriz
+cloud.google.com
+. İstekler, Google API anahtarımız AIzaSyAlH... kullanılarak yapılır. API çağrısı öncesi gerekli yetkilendirme ve ortam kurulumu Node.js üzerinde yapılacaktır (Google’ın sağladığı servis hesabı veya API Key ile).
+Semantik Arama (Embeddings): Doğal dil sorgularını ve doküman içeriklerini vektörlere çevirerek anlamsal uzayda karşılaştırmak için Gemini’nin embedding modelini kullanacağız. Google’ın duyurusuna göre Gemini, dökümanlar ve sorgular için milyonlarca tokenlık girdileri anlayabilir ve gömü (embedding) vektörleri üretebilir
+ai.google.dev
+. Özellikle Gemini Embeddings modeli, üretim ortamında kullanılabilecek şekilde tasarlanmıştır
+ai.google.dev
+. Backend bu modeli, doküman yükleme sırasında ve arama sorgusu geldiğinde çağırarak gerekli vektör hesaplamalarını yapacak. Elde edilen vektörler MongoDB’de saklanıp kıyaslanacak (ya da alternatif olarak vektör benzerlik araması için Google Vertex AI Search kullanılabilir, ancak burada verilerimizi kendi DB’mizde tutmayı planladık).
+Anahtar Kelime/Önemli Bilgi Çıkarımı: LLM, metin içindeki önemli öğeleri çıkarmada da kullanılabilir. Gemini modeli, uygun bir istemle yönlendirildiğinde metindeki önemli konu başlıklarını veya maddeleri listeleyebilir
+dev.to
+. Bu, bir çeşit metni anlama ve yeniden yapılandırma problemidir ve LLM için uygundur. Hatta Google’ın ML Kit GenAI Summarization API benzeri servisleriyle özet maddeler çıkarılabildiği bilinmektedir (örneğin bir metinden madde madde özet çıkarma)
+developers.google.com
+. Bizim senaryomuzda, tam cümleli özetten ziyade sadece anahtar kelimeler istendiğinden, LLM’e “Extract key words or phrases” şeklinde bir prompt verilerek sonuç alınabilir.
+Gemini API Çağrılarında Dikkat Edilecekler:
+API anahtarı güvenli biçimde sunucu tarafında saklanır (ortam değişkeni ile). İstemciye kesinlikle bu anahtar gösterilmez.
+Her bir LLM isteğinin maliyeti ve süresi göz önünde bulundurulmalıdır. Özetleme ve anahtar kelime çıkarma işlemleri için makul token limitleri kullanıp, gerekirse uzun dokümanlarda işlemi bölmek önemlidir.
+Google API çağrıları sırasında oluşabilecek hatalar (ör. ağ sorunları, kota aşımı, input boyutu hataları) ele alınmalı ve kullanıcıya uygun hata mesajları dönülmelidir.
+Çoklu ortam desteği: Gemini modelleri görüntü ve video gibi medyayı da işleyebilen multimodal yapıda olsa da, PDF gibi belgeleri doğrudan gönderme noktasında kısıtlar olabilir. Stack Overflow üzerindeki tartışmalarda, PDF’lerin doğrudan Gemini’ye verilmesinin şu an için desteklenmediği, bunun yerine PDF’yi önceden metne dönüştürüp modele vermek gerektiği belirtilmiştir
+stackoverflow.com
+. Bu sebeple, mimarimizde PDF’leri metne dönüştürme adımını mutlaka uyguluyoruz. Gerekirse, Gemini’nin dosya yükleme arayüzü (Google’ın media.upload API’si) kullanılarak PDF’yi imajlara çevirip gönderme gibi gelişmiş yöntemler de mümkündür, ancak proje kapsamında daha basit ve güvenilir yol olan metin çıkarma tercih edilmiştir.
+Veritabanı (MongoDB) Tasarımı
+MongoDB, uygulamanın hem kullanıcı verilerini hem de doküman ve ilgili işlem verilerini tutar. Kullanılacak koleksiyonlar ve şemalara dair taslak:
+Users Koleksiyonu: Her kullanıcı için bir belge (document) içerir. Alanlar:
+_id (ObjectId, otomatik)
+username, email – benzersiz kullanıcı bilgileri.
+passwordHash – Hash’lenmiş şifre (bcrypt ile üretilmiş). Şifreler tek yönlü hash ile tutulur, bu sayede veritabanı açığı olsa bile düz şifreler ifşa olmaz
+honeybadger.io
+.
+createdAt, lastLogin vb. alanlar.
+Documents Koleksiyonu: Yüklenen her doküman için bir belge. Alanlar:
+_id: Doküman ID (ObjectId).
+ownerId: Bu dokümanın sahibi olan kullanıcının ID’si (users koleksiyonuna referans).
+fileName: Orijinal dosya adı.
+fileType: Dosya türü (pdf, docx, txt vs).
+contentText: Dosyadan çıkarılan ham metin içerik.
+summaryText: (Opsiyonel) Özet metni. İlk başta boş olabilir, istek gelince doldurulup saklanabilir.
+keywords: (Opsiyonel) Çıkarılan anahtar kelime listesi.
+embedding: (Opsiyonel) Dokümanın içerik vektörü (embedding) – Array[float] biçiminde. Örneğin 768 boyutlu bir vektör.
+createdAt: Yüklenme zamanı, updatedAt: güncellenme zamanı vs.
+Indexes:
+Documents.contentText alanı üzerinde full-text index kurulacaktır (MongoDB text index). Bu, basit kelime aramalarında kullanılır.
+Documents.embedding alanı üzerinde vector index oluşturulacaktır (MongoDB Atlas Vector Search özelliği). Örneğin, numDimensions: 384, similarity: cosine gibi bir vektör indeksi tanımlanabilir
+medium.com
+. Bu sayede, vektörler arası benzerlik sorguları (ANN - yaklaşık en yakın komşu araması) mümkün olur. Böyle bir index, doküman özetlerini ya da içerik parçalarını semantik olarak aramayı sağlar
+mongodb.com
+.
+Documents.ownerId alanı üzerinde normal bir index, kullanıcı bazlı sorguları hızlandırmak için.
+Users.email ve Users.username üzerinde unique index, aynı email/ismi engellemek için.
+Veritabanı Bağlantısı: Proje, verilen bağlantı dizesini (MongoDB Atlas bağlantısı) kullanarak Node.js sunucusu başlatılırken veritabanına bağlanacak. Bu bağlantı dizesi mongodb+srv://... formatında olup, gerekli kullanıcı adı ve şifre içeriyor (örnekte appUser kullanıcısı). Bu kritik bilgiyi Node.js uygulamasında bir yapılandırma dosyasından veya ortam değişkeninden alacağız ve mongoose gibi bir ODM kullanarak bağlantıyı kuracağız. Veri Güvenliği:
+Parola gibi hassas bilgiler hash’li saklanacak dedik. Ayrıca, contentText gibi alanlar kullanıcıların özel doküman içeriklerini barındırdığından, veritabanı erişimleri düzgün yetkilendirilmezse risk oluşturabilir. Uygulama katmanında zaten her istekte kullanıcının yalnız kendi dokümanlarını almasına izin vereceğiz (ownerId kontrolü).
+Düşünülürse, ek güvenlik için doküman metinleri şifreli olarak da saklanabilir ve sadece uygulama sunucusu çözebilir. Fakat bu, LLM işlemleri öncesi deşifre etmeyi gerektirip karmaşıklık katacaktır. Bu seviyede, TLS ile veritabanı iletişimi ve bulutta Atlas’ın kendi güvenlik önlemleri yeterli görülmektedir.
+Güvenlik ve Yetkilendirme
+Uygulamanın güvenliği birinci önceliktir. Alınan önlemlerin özeti:
+Kullanıcı Doğrulama: Tüm API uç noktaları, /auth/* haricinde JWT veya oturum ile korunur. İstemci giriş yaptığında aldığı token’ı isteklerin Authorization başlığında gönderir (Bearer token). Sunucu, gelen token’ı doğrulayarak isteğin gerçek bir kullanıcıdan gelip gelmediğini ve token süresinin geçerli olup olmadığını kontrol eder. Geçersiz veya süresi dolmuş token durumda 401 Unauthorized döner.
+Şifre Saklama: Kullanıcı şifreleri asla düz metin tutulmaz, güçlü bir algoritma (bcrypt) ile tuzlanarak hashlenir. Bcrypt gibi algoritmalar, brute force saldırılarını yavaşlatacak şekilde tasarlanmıştır ve aynı parolalar için bile farklı hash üretir (salt kullanımı sayesinde)
+honeybadger.io
+.
+Şifre Sıfırlama: (İleriki geliştirme kapsamında düşünülebilir) Şifremi unuttum özelliği için e-posta doğrulamalı sıfırlama süreçleri planlanabilir.
+Erişim Yetkileri: Bir kullanıcının sadece kendi dokümanlarına erişebilmesi sağlanır. Örneğin, /documents/:id/ tarzı uç noktalar çağrılırken sunucu, belgenin ownerId alanını giriş yapan kullanıcının id’siyle karşılaştırır. Eşleşmiyorsa 403 Forbidden hatası döndürülür. Aynı şekilde listeleme ve arama da daima ilgili kullanıcının filtresiyle yapılır.
+Rate Limiting: Özellikle özetleme ve arama gibi API’ler, arka planda LLM çağırdığı için pahalı operasyonlardır. Kötüye kullanım veya hata durumunda sistemin aşırı yüklenmesini engellemek adına, kullanıcının bu işlemleri belli bir hızın üstünde yapmasını engelleyebiliriz (ör. kullanıcı başına dakikada X özetleme talebi).
+API Key Güvenliği: Google Gemini API anahtarı sadece sunucu ortam değişkeninde tutulur. Geliştirme sırasında .env dosyasında yer alacak, versiyon kontrolüne koyulmayacaktır. Sunucu dışında kimse bu anahtarı görmez. Ayrıca Google Cloud konsolundan bu anahtarın izinleri sadece gerekli API çağrılarıyla sınırlanmalı.
+HTTPS Zorunluluğu: Hem istemci-sunucu hem de sunucu-Google API iletişimi TLS üzerinden yapılmalıdır. Varsayılan olarak tarayıcı istekleri (özellikle üretimde) HTTPS olacaktır. Google API zaten HTTPS kullanıyor.
+Sunucu Güvenliği: Express.js üzerinde gelen verilerin boyutu ve türü sınırlandırılacak (örn. upload için kabul edilen dosya türleri, maksimum dosya boyutu gibi). Ayrıca parametreler JWT doğrulaması vb. haricinde de XSS, SQL/NoSQL enjeksiyonlarına karşı kontrol edilir (MongoDB için gelen sorgu parametrelerini belirli whitelist ile kullanmak gibi).
+Loglama ve İzleme: Şüpheli etkinliklerin (örneğin üst üste başarısız giriş denemeleri, çok sayıda ardışık özetleme isteği) loglanması ve gerekirse adminlere uyarı mekanizması planlanabilir. Bu, güvenlik ihlallerini erken tespit etmeye yardımcı olur.
+Ölçeklenebilirlik ve Diğer Hususlar
+Dosya Boyutu ve Performans: Büyük dokümanların işlenmesi (özellikle LLM özetlemesi) zaman alabilir. Bu durumda, istekleri asenkron işleyip kullanıcının sonradan sonucu almasını sağlama (örneğin bir kuyruğa alıp sonrasında sonucu email ile gönderme veya sayfayı belli aralıklarla sunucudan sonucu çekmeye zorlama) gibi ölçeklenebilirlik seçenekleri değerlendirilebilir. İlk sürümde, orta boyutlu dokümanlar hedeflenerek senkron bir çözüm seçilmiştir.
+Çoklu Doküman Özetleme/Arama: Şu anki tanım her seferinde tek bir doküman üzerinde işlem yapıyor (özeti veya anahtar kelimesi). Gelecekte, birden fazla dokümanı çapraz özetleme (ör. "Tüm belgelerim arasında özet çıkar") veya toplu arama gibi özellikler istenirse, benzer prensipler daha geniş veri üzerinde çalışacak şekilde ölçeklendirilebilir.
+Versiyonlama: API uç noktaları gerekirse versionlanabilir (örn. /api/v1/documents/...). Ancak proje dahili kullanım için olduğundan şimdilik gerek görülmemiştir.
+Dokümantasyon: Geliştiriciler için bir API dökümantasyonu (Swagger/OpenAPI) hazırlanması yararlı olur. Bu sayede hangi uç noktaya hangi verilerin gönderileceği netleşir. Kullanıcılar için de, aşağıda verilen kullanıcı dokümantasyonu kılavuz olarak sunulmuştur.
+Kullanıcı Dokümantasyonu
+Bu bölüm, uygulamayı kullanacak son kullanıcılar için bir kılavuz niteliğindedir. Adım adım sistemdeki temel işlemler ve arayüz kullanımı aşağıda açıklanmaktadır:
+Kayıt ve Giriş:
+Uygulamayı kullanmaya başlamak için ilk olarak kayıt olmanız gerekmektedir. Kayıt ol sayfasında adınızı, e-posta adresinizi ve belirlediğiniz bir şifreyi girip onaylayınız. Kayıt başarılı ise sistem otomatik olarak giriş yapmanızı sağlayabilir veya giriş sayfasına yönlendirebilir.
+Zaten hesabınız varsa, Giriş yap ekranında e-posta ve şifrenizi girerek sisteme giriş yapın. Doğru bilgileri girdiyseniz, kendi yönetim panelinize yönlendirileceksiniz.
+Güvenlik İpucu: Şifrenizin tahmin edilmesi zor, en az 8 karakterli ve harf-rakam özel karakter kombinasyonlu olmasına özen gösterin. Sisteme girdiğiniz şifre sunucuda güvenli bir şekilde saklanır (şifreniz düz metin halinde tutulmaz). Eğer şifrenizi unutursanız, "Şifremi Unuttum" adımlarıyla sıfırlama talebi oluşturabilirsiniz (varsa bu özellik).
+Doküman Yükleme:
+Giriş yaptıktan sonra, karşınıza Dokümanlarım sayfası gelecektir. Bu sayfada daha önce yüklediğiniz dokümanlar listelenir ve yeni doküman yükleme arayüzü bulunur.
+Yeni bir doküman eklemek için sayfadaki “Dosya Yükle” veya “Yeni Doküman Ekle” butonuna tıklayın. Açılan dosya seçimi penceresinden bilgisayarınızdan yüklemek istediğiniz belgeyi seçin (PDF, Word, veya metin dosyası formatlarında olabilir).
+Dosyayı seçtikten sonra “Yükle” butonuna basın. Yükleme işlemi başladığında bir ilerleme göstergesi veya bekleme animasyonu görebilirsiniz. Dosya boyutuna göre bu işlem birkaç saniye sürebilir.
+Yükleme tamamlandığında, seçtiğiniz doküman listede görünecektir. Örneğin doküman adı, yükleme tarihi gibi bilgiler listede yer alır. (Eğer liste otomatik güncellenmezse sayfayı yenileyebilirsiniz.)
+Not: Şu an için her seferinde tek bir dosya yükleyebilirsiniz. Birden çok dosyayı aynı anda seçip yüklemek desteklenmez (her dosya için ayrı yükleme yapmalısınız).
+Doküman Listesi ve İşlemler:
+Yüklenen her doküman, listede ayrı bir kart veya satır olarak gösterilir. Burada dokümanın adı ve birkaç eylem butonu bulunur:
+Özet Çıkar (Özetle): Bu buton, ilgili dokümanın içeriğini kısaltarak bir özet oluşturur. Butona bastığınızda sistem arka planda doküman metnini analiz edecek ve birkaç cümlelik özetini çıkaracaktır. Özet hazırlandığında doküman kartının altında veya bir pop-up pencerede görüntülenecektir. Özette, dokümanın ana fikirleri yalın bir dille ifade edilir.
+Anahtar Kelimeleri Göster: Bu butona bastığınızda sistem dokümanın içeriğini tarayarak en önemli anahtar kelime ve ifadeleri belirler. Sonuç olarak, dokümanın içeriğini temsil eden kelimeler listesi ekranda belirecektir. Örneğin bir araştırma makalesi yüklediyseniz, anahtar kelimeler listesinde makalenin konusu, kullanılan yöntemler vb. anahtar kavramlar yer alabilir.
+Sil: (Varsa) Bir dokümanı artık sistemde tutmak istemiyorsanız silme butonuyla kaldırabilirsiniz. Silinen doküman artık arama sonuçlarına da çıkmayacak ve geri alınamaz şekilde sistemden temizlenecektir.
+Doküman listesinde çok sayıda öğe varsa sayfalama veya scroll yapılabilir. Her dokümanın yanında sadece o kullanıcıya ait olduğu belirtilmiştir; başka kullanıcıların dokümanlarını sizin listenizde görmezsiniz.
+Doğal Dilde Arama Kullanımı:
+Ekranın üst bölümünde veya ayrı bir arama sayfasında Arama Çubuğu bulunur. Bu alana aramak istediğiniz konuyu veya soruyu doğal bir cümle olarak girebilirsiniz. Örneğin: "Makine öğrenimi dokümanlarında veri ön işleme nasıl yapılıyor?" gibi bir soru yazabilirsiniz.
+Arama metnini girdikten sonra büyüteç ikonuna veya Ara butonuna tıklayın. Sistem, hesabınızdaki tüm dokümanların içeriğini tarayarak sorgunuza en uygun parçaları bulacaktır.
+Arama Sonuçları: Sonuçlar, genellikle liste halinde gösterilir. Her bir sonuç, ilgili dokümanın adı ve içinde geçen ilgili metin parçasını içerebilir. Örneğin, bir doküman içinde aradığınız kelime veya eşanlamlısı geçtiyse, sonuçta o cümlenin bir kısmı vurgulanmış olarak görünür. Eğer arama sorgunuz bir soru cümlesiyse, sistem bu soruya yanıt barındıran doküman bölümlerini de öncelikli getirebilir.
+Bir sonuca tıkladığınızda isterseniz ilgili dokümanın tam metnini açabilir veya o doküman üzerinde özet/anahtar kelime işlemlerini yapabilirsiniz. Böylece aradığınız bilgiye daha geniş bağlamıyla ulaşmanız mümkün olur.
+İpuçları:
+Arama çubuğuna tek kelime de yazabilirsiniz, tam bir soru cümlesi de. Sistem anlamsal arama desteği sayesinde, tam eşleşmeyen ama benzer anlamı taşıyan sonuçları da getirebilir. Örneğin "araba" yerine "otomobil" geçen yerleri bulabilir.
+Aramayı daraltmak isterseniz, sorguya belirli kelimeler koyabilirsiniz. Gelişmiş sürümlerde, belirli doküman türlerine göre filtreleme (sadece PDF'lerde ara gibi) mümkün olabilir.
+Özetleme İşlevi Kullanımı:
+Özet görmek istediğiniz dokümanın Özetle butonuna tıklayınca, buton üzerinde bir yükleme animasyonu belirebilir veya "Özet hazırlanıyor..." şeklinde bir mesaj görebilirsiniz.
+Genellikle birkaç saniye içinde özet oluşturulur. Özet hazırlandığında doküman öğesinin altında metin olarak gösterilir. Bu özet, orijinal belgenin en önemli noktalarını içerir. Örneğin, 10 sayfalık bir raporu yüklediyseniz, özet kısmında raporun amacı, bulguları ve sonucun kısa bir özeti yer alacaktır.
+Özet metni otomatik olarak sistem tarafından üretildiği için, ana belgeyi okumadan önce genel bir fikir edinmenizi sağlar. Yine de kritik detaylar için tam dokümana başvurmanız gerekebilir. Özet üzerinde önemli gördüğünüz bir nokta varsa, dokümanın tamamında o bölümü bularak okuyabilirsiniz.
+Not: Özetler yapay zeka tarafından üretildiğinden, nadiren de olsa metindeki bazı noktalar atlanabilir veya çok genel ifadeler bulunabilir. Bu, dokümanın yapısına bağlıdır. Önemli kararlar almadan önce orijinal dokümanı incelemek en iyi uygulamadır.
+Anahtar Kelime Çıkarma İşlevi Kullanımı:
+Bir dokümandaki ana temaları görmek için ilgili dokümanın Anahtar Kelimeleri Göster (veya "Anahtar Kelime Çıkar") butonuna tıklayın.
+Sistem kısa bir işlemden sonra dokümanın içerisinden seçilmiş anahtar kelime ve kelime öbeklerini listeleyecektir. Bu liste, dokümanın en çok vurguladığı konuları yansıtır.
+Örneğin bir bilimsel makale dokümanı için anahtar kelimeler listesinde "derin öğrenme", "veri seti", "eğitim süreci" gibi ifadeler görebilirsiniz. Bir toplantı tutanağı yüklediyseniz, listede toplantıda konuşulan ana gündem maddeleri yer alabilir.
+Anahtar kelime listesi, dokümanı hızlıca kategorize etmenize yarar. Ayrıca bu kelimelere tıklayarak (arayüz bu özelliği destekliyorsa) ilgili kelimenin geçtiği yerlere gidebilir veya bu kelimeyle arama yapabilirsiniz.
+İpucu: Eğer anahtar kelime listesinde alakasız görünen kelimeler varsa, doküman çok geniş kapsamlı olabilir. Bu durumda daha spesifik bir dokümanla çalışmak veya özet üzerinden tekrar anahtar kelime çıkarmak düşünülebilir. Ancak çoğu durumda listelenen terimler dokümanın özünü yansıtacaktır.
+Genel Kullanım İpuçları ve Son Notlar:
+Uygulamada yaptığınız işlemler (doküman yükleme, özetleme, arama) oturum açtığınız kullanıcıya özeldir. Başkaları sizin dokümanlarınızı veya sonuçlarınızı göremez. Aynı şekilde siz de başkalarının verisine erişemezsiniz.
+Tarayıcıyı kapattığınızda oturumunuz sonlanmadıysa (ör. "Beni hatırla" seçeneği varsa), geri döndüğünüzde tekrar giriş yapmak zorunda kalmadan kaldığınız yerden devam edebilirsiniz. Ortak bilgisayar kullanıyorsanız çıkış yapmayı unutmayın.
+Hız ve Limitler: Özetleme ve arama işlemleri bulut yapay zeka servislerini kullandığı için, normalden biraz daha yavaş olabilir. Özellikle çok uzun belgelerde özet çıkarma yarım dakikayı bulabilir. Lütfen işlemin tamamlanmasını bekleyin ve butonlara tekrar tekrar basmayın. Sistem, çok sık arka arkaya istek gelirse bunları reddedebilir (kullanıcı deneyimini korumak için).
+Desteklenen Dosya Formatları: PDF (metin içerikli), Microsoft Word (.docx), düz .txt dosyaları sorunsuz desteklenir. PDF’ler içerisinde taranmış görüntüler varsa, metin çıkarma başarısız olabilir – şimdilik böyle durumlarda uyarı alabilirsiniz. Gelecekte görüntüden OCR ile okuma özelliği gelebilir.
+Hata Durumları: Eğer bir işlem başarısız olursa (örneğin özetleme sırasında bir hata oluşursa), arayüzde bir hata mesajı göreceksiniz. Bu durumda işlemi yeniden deneyebilirsiniz. Sorun sürerse internet bağlantınızı ve dosya formatınızın uygunluğunu kontrol edin.
+Gizlilik: Yüklediğiniz dokümanlar ve onlardan elde edilen özet/anahtar kelime gibi veriler sizin hesabınıza bağlı olarak saklanır. Bu veriler üçüncü taraflarla paylaşılmaz. Sistemdeki yapay zeka işlemleri (özetleme vb.) için doküman içeriğiniz Google’ın AI servislerine gönderilir ancak bu veriler yalnızca işlem için kullanılır. Önemli veya gizli bilgiler içeriyorsa, lütfen kullanım şartlarını ve gizlilik politikasını gözden geçirin.
+Bu dokümantasyonda açıklanan adımları izleyerek, doküman yönetimi ve doğal dil işlemeyi birleştiren bu platformdan en iyi şekilde yararlanabilirsiniz. Sistem, manuel okumaya zaman alacağınız içerikleri hızla özetleyerek veya arayarak verimliliğinizi artırmayı hedeflemektedir.
+
+
+api key=AIzaSyAlH3UtjXv2dwlFLrc122wwiynpGHrs2mg
+MONGO_URI=mongodb+srv://appUser:123654789eRt@cluster0.a7fdu.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
